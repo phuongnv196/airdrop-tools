@@ -1,82 +1,116 @@
 
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));;
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
+import { MongoClient } from 'mongodb';
 
-var extInfoData = {"extInfo":{}};
 
-const initData = {
-    tapRemain: 3000,
-    availableAmount: 0,
-    cookies: ''
-};
+const dbUrl = 'mongodb+srv://siunvp:siungoc96@siu.vmhcq.mongodb.net/?retryWrites=true&w=majority&appName=siu';
 
-const login = async () => {
+const client = new MongoClient(dbUrl);
+
+let extInfos = [];
+
+const loginData = {};
+
+var intervals = {};
+
+
+const login = async (extInfo) => {
+    const user = JSON.parse(extInfo.extInfo.user);
     const rawResponse = await fetch('https://www.kucoin.com/_api/xkucoin/platform-telebot/game/login?lang=en_US', {
         method: 'POST',
         headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify(extInfoData)
+        body: JSON.stringify(extInfo)
     });
     const content = await rawResponse.json();
     if (/x_g_t_k=(.+?);/.test(rawResponse.headers.get('set-cookie'))) {
-        initData.cookies = /x_g_t_k=(.+?);/.exec(rawResponse.headers.get('set-cookie'))[0];
+        if (!loginData[user.id]) {
+            loginData[user.id] = {};
+        }
+        loginData[user.id].cookies = /x_g_t_k=(.+?);/.exec(rawResponse.headers.get('set-cookie'))[0];
     }
     return content;
 }
 
-const getSummary = async () => {
+const getSummary = async (user) => {
     const res = await fetch('https://www.kucoin.com/_api/xkucoin/platform-telebot/game/summary?lang=en_US', {
         headers: {
             'Accept': 'application/json',
-            'Cookie': initData.cookies
+            'Cookie': loginData[user.id].cookies
         }
     });
 
     return await res.json();
 }
 
-(async () => {
-    var loginResult = await login();
+const appRun = () => {
+    extInfos.forEach(item => {
+        (async () => {
+            const user = JSON.parse(item.extInfo.user);
 
-    if (loginResult.success) {
-        console.log("Đăng nhập thành công!");
-        const summary = await getSummary();
-        initData.tapRemain = summary.data.feedPreview.molecule;
-        initData.availableAmount = summary.data.availableAmount;
+            const loginResult = await login(item);
+            if (loginResult.success) {
+                console.log("Đăng nhập thành công!");
+                const summary = await getSummary(user);
+                loginData[user.id].tapRemain = summary.data.feedPreview.molecule;
+                loginData[user.id].availableAmount = summary.data.availableAmount;
 
-        setInterval(() => {
-            initData.tapRemain += 2;
-        }, 1000);
+                setInterval(() => {
+                    loginData[user.id].tapRemain += 2;
+                }, 1000);
 
-        setInterval(async () => {
-            let randomTaps = Math.floor(Math.random() * (16 - 10)) + 10;
-            randomTaps = initData.tapRemain > randomTaps ? randomTaps : initData.tapRemain;
-            
-            const formdata = new FormData();
-            formdata.append("increment", randomTaps);
-            formdata.append("molecule", initData.tapRemain - randomTaps);
-            
-            const res = await fetch('https://www.kucoin.com/_api/xkucoin/platform-telebot/game/gold/increase?lang=en_US', {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Cookie': initData.cookies
-                },
-                body: formdata
-            });
+                setInterval(async () => {
+                    let randomTaps = Math.floor(Math.random() * (16 - 10)) + 10;
+                    randomTaps = loginData[user.id].tapRemain > randomTaps ? randomTaps : loginData[user.id].tapRemain;
 
-            const result = await res.json();
-            if (result && result.success) {
-                initData.tapRemain -= randomTaps;
-                initData.availableAmount += randomTaps;
-                console.log(`Đã tap ${randomTaps} còn lại ${initData.tapRemain} Số coins: ${initData.availableAmount}`);
-            } else {
-                await login();
+                    const formdata = new FormData();
+                    formdata.append("increment", randomTaps);
+                    formdata.append("molecule", loginData[user.id].tapRemain - randomTaps);
+
+                    const res = await fetch('https://www.kucoin.com/_api/xkucoin/platform-telebot/game/gold/increase?lang=en_US', {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Cookie': loginData[user.id].cookies
+                        },
+                        body: formdata
+                    });
+
+                    const result = await res.json();
+                    if (result?.success) {
+                        loginData[user.id].tapRemain -= randomTaps;
+                        loginData[user.id].availableAmount += randomTaps;
+                        console.log(`User Id: ${user.id} - ${user.first_name} ${user.last_name}: Đã tap ${randomTaps} còn lại ${loginData[user.id].tapRemain} Số coins: ${loginData[user.id].availableAmount}`);
+                    } else {
+                        await login(item);
+                    }
+                }, 5000);
             }
-        }, 3000);
-    }
-    else {
-        console.log('Đăng nhập thất bại!');
+            else {
+                console.log('Đăng nhập thất bại!');
+            }
+        })();
+    });
+}
+
+
+(async () => {
+
+    try {
+        await client.connect();
+        const database = client.db('Airdrop');
+        const collection = database.collection('XFrogExtInfos');
+
+        const documents = await collection.find({}).toArray();
+        extInfos = documents.map(item => { return {
+            extInfo: item.extInfo
+        }});
+        appRun();
+    } catch (e){
+        console.error(e);
+    } finally {
+        client.close();
     }
 })();
