@@ -62,29 +62,33 @@ const appRun = () => {
                 }, 1000);
 
                 setInterval(async () => {
-                    let randomTaps = Math.floor(Math.random() * (16 - 10)) + 10;
-                    randomTaps = loginData[user.id].tapRemain > randomTaps ? randomTaps : loginData[user.id].tapRemain;
-
-                    const formdata = new FormData();
-                    formdata.append("increment", randomTaps);
-                    formdata.append("molecule", loginData[user.id].tapRemain - randomTaps);
-
-                    const res = await fetch('https://www.kucoin.com/_api/xkucoin/platform-telebot/game/gold/increase?lang=en_US', {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/json',
-                            'Cookie': loginData[user.id].cookies
-                        },
-                        body: formdata
-                    });
-
-                    const result = await res.json();
-                    if (result?.success) {
-                        loginData[user.id].tapRemain -= randomTaps;
-                        loginData[user.id].availableAmount += randomTaps;
-                        console.log(`User Id: ${user.id} - ${user.first_name} ${user.last_name}: Đã tap ${randomTaps} còn lại ${loginData[user.id].tapRemain} Số coins: ${loginData[user.id].availableAmount}`);
-                    } else {
-                        await login(item);
+                    try {
+                        let randomTaps = Math.floor(Math.random() * (16 - 10)) + 10;
+                        randomTaps = loginData[user.id].tapRemain > randomTaps ? randomTaps : loginData[user.id].tapRemain;
+    
+                        const formdata = new FormData();
+                        formdata.append("increment", randomTaps);
+                        formdata.append("molecule", loginData[user.id].tapRemain - randomTaps);
+    
+                        const res = await fetch('https://www.kucoin.com/_api/xkucoin/platform-telebot/game/gold/increase?lang=en_US', {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Cookie': loginData[user.id].cookies
+                            },
+                            body: formdata
+                        });
+    
+                        const result = await res.json();
+                        if (result?.success) {
+                            loginData[user.id].tapRemain -= randomTaps;
+                            loginData[user.id].availableAmount += randomTaps;
+                            console.log(`User Id: ${user.id} - ${user.first_name} ${user.last_name}: Đã tap ${randomTaps} còn lại ${loginData[user.id].tapRemain} Số coins: ${loginData[user.id].availableAmount}`);
+                        } else {
+                            await login(item);
+                        }
+                    } catch {
+                        console.log('Tap thất bại!');
                     }
                 }, 5000);
             }
