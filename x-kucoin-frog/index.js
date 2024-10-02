@@ -105,7 +105,7 @@ const appRun = () => {
     try {
         await client.connect();
         const database = client.db('Airdrop');
-        const collection = database.collection('XFrogExtInfos_2');
+        const collection = database.collection('XFrogExtInfos');
 
         const documents = await collection.find({}).toArray();
         extInfos = documents.map(item => { return {
